@@ -16,10 +16,21 @@ class GhostGuardApp : Application() {
     lateinit var eventLog: EventLog
         private set
 
+    val crashFile: File get() = File(filesDir, "last_crash.txt")
+
     override fun onCreate() {
         super.onCreate()
         settings = Settings(this)
         eventLog = EventLog(File(filesDir, "events.csv"))
+
+        // Keep the last crash so the debug screen can show it after a restart.
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                crashFile.writeText("${java.util.Date()}\n${error.stackTraceToString()}")
+            }
+            previous?.uncaughtException(thread, error)
+        }
 
         val channel = NotificationChannel(
             CHANNEL_ID,

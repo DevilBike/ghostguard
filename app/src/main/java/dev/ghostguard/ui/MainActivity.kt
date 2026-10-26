@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
@@ -52,6 +53,9 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) permissions.launch(wanted.toTypedArray())
 
         val app = GhostGuardApp.from(this)
+        // If the guard is meant to be on but died, opening the app revives it.
+        if (app.settings.config.value.guardEnabled) GuardService.start(this)
+
         setContent {
             GhostGuardTheme {
                 Root(
@@ -71,7 +75,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab(val label: String) { STATUS("Guard"), TUNING("Tuning"), LOG("Log") }
+private enum class Tab(val label: String) { STATUS("Guard"), TUNING("Tuning"), LOG("Log"), DEBUG("Debug") }
 
 @Composable
 private fun Root(
@@ -96,6 +100,7 @@ private fun Root(
                                     Tab.STATUS -> Icons.Filled.Shield
                                     Tab.TUNING -> Icons.Filled.Tune
                                     Tab.LOG -> Icons.Filled.List
+                                    Tab.DEBUG -> Icons.Filled.BugReport
                                 },
                                 contentDescription = entry.label,
                             )
@@ -110,6 +115,7 @@ private fun Root(
             Tab.STATUS -> StatusScreen(app, openNotificationAccess, openAccessibility, requestMicrophone, content)
             Tab.TUNING -> TuningScreen(app, content)
             Tab.LOG -> LogScreen(app, content)
+            Tab.DEBUG -> DebugScreen(app, content)
         }
     }
 }

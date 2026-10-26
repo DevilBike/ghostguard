@@ -150,8 +150,15 @@ class UsbHidCapture(
             return
         }
 
-        val bits = readReportDescriptor(conn, iface)?.let { HidReportMap.parse(it) }.orEmpty()
+        val descriptor = readReportDescriptor(conn, iface)
+        val bits = descriptor?.let { HidReportMap.parse(it) }.orEmpty()
         val known = bits.filter { it.toButton() != Button.UNKNOWN }
+        Diagnostics.note(
+            "$name: interface ${iface.id} claimed, report descriptor " +
+                (descriptor?.let { "${it.size} bytes: ${it.toHex()}" } ?: "unreadable") +
+                "; ${bits.size} one-bit inputs, recognised: " +
+                known.joinToString { "page %02x usage %02x".format(it.usagePage, it.usage) }
+        )
         if (known.isEmpty()) {
             // Taking over an interface whose buttons we cannot decode would
             // leave the user with no working buttons at all. Hand it back.
@@ -231,6 +238,8 @@ class UsbHidCapture(
                     (it.type == UsbConstants.USB_ENDPOINT_XFER_INT ||
                         it.type == UsbConstants.USB_ENDPOINT_XFER_BULK)
             }
+
+    private fun ByteArray.toHex(): String = joinToString(" ") { "%02x".format(it) }
 
     private fun UsbDevice.displayName(): String =
         productName ?: "USB device ${String.format("%04x:%04x", vendorId, productId)}"

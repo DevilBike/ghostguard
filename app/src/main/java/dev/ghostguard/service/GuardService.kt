@@ -92,6 +92,7 @@ class GuardService : LifecycleService() {
         usbCapture = UsbHidCapture(this, ::onUsbEvent) { status ->
             handler.post {
                 usbStatus = status
+                Diagnostics.usbStatus(describe(status))
                 updateNotification()
             }
         }
@@ -118,7 +119,15 @@ class GuardService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        startForegroundCompat()
+        try {
+            startForegroundCompat()
+            Diagnostics.serviceRunning(true)
+        } catch (e: Exception) {
+            // Without this the service dies silently and nothing is captured.
+            Diagnostics.note("could not start in the foreground: $e")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         // Notification access may have been granted since onCreate.
         handler.post {
             watchActiveSessions()
@@ -131,6 +140,8 @@ class GuardService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        Diagnostics.serviceRunning(false)
+        Diagnostics.mediaSession(false)
         GuardBridge.volumeKeySink = null
         runCatching {
             getSystemService(MediaSessionManager::class.java)
@@ -167,6 +178,7 @@ class GuardService : LifecycleService() {
 
             if (wantsUsb) usbCapture.start() else usbCapture.stop()
             if (wantsMedia) mediaCapture.start() else mediaCapture.stop()
+            Diagnostics.mediaSession(mediaCapture.isRunning)
 
             updateNotification()
         }
@@ -175,6 +187,10 @@ class GuardService : LifecycleService() {
     // ---- capture callbacks -------------------------------------------------
 
     private fun onMediaKey(event: KeyEvent) {
+        Diagnostics.rawEvent(
+            SOURCE_MEDIA,
+            "${KeyEvent.keyCodeToString(event.keyCode)} ${actionName(event)} from ${deviceNameFor(event.deviceId)}",
+        )
         if (SystemClock.uptimeMillis() < forwarder.ignoreSelfUntilUptimeMs) return
         val button = ButtonMapping.fromKeyCode(event.keyCode)
         if (button == Button.UNKNOWN) return
@@ -193,6 +209,7 @@ class GuardService : LifecycleService() {
     }
 
     private fun onUsbEvent(button: Button, down: Boolean, uptimeMs: Long, deviceName: String) {
+        Diagnostics.rawEvent(SOURCE_USB, "$button ${if (down) "down" else "up"}")
         submit(
             RawEvent(button = button, down = down, timestampMs = uptimeMs, deviceKey = deviceName),
             source = SOURCE_USB,
@@ -209,6 +226,7 @@ class GuardService : LifecycleService() {
         if (!config.guardEnabled || !config.filterVolumeKeys) return false
         val button = ButtonMapping.fromKeyCode(event.keyCode)
         if (!ButtonMapping.isVolume(button)) return false
+        Diagnostics.rawEvent(SOURCE_VOLUME, "$button ${actionName(event)}")
 
         submit(
             RawEvent(
@@ -244,7 +262,10 @@ class GuardService : LifecycleService() {
         for (emission in emissions) {
             log.record(emission, source, deviceName)
             when (emission) {
-                is Emission.Accepted -> forwarder.dispatch(emission.button, emission.longPress)
+                is Emission.Accepted -> {
+                    val target = forwarder.dispatch(emission.button, emission.longPress)
+                    Diagnostics.note("forwarded ${emission.button} to $target")
+                }
                 is Emission.Blocked -> blockedSinceStart++
             }
         }
@@ -255,8 +276,10 @@ class GuardService : LifecycleService() {
 
     private fun startForegroundCompat() {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            // connectedDevice is deliberately left out: on Android 14+ it
+            // demands a prerequisite permission at start time, and a USB grant
+            // may not exist yet, which makes startForeground throw.
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         } else {
             0
         }
@@ -301,6 +324,22 @@ class GuardService : LifecycleService() {
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
+    }
+
+    private fun actionName(event: KeyEvent) = when (event.action) {
+        KeyEvent.ACTION_DOWN -> if (event.repeatCount > 0) "repeat" else "down"
+        KeyEvent.ACTION_UP -> "up"
+        else -> "action ${event.action}"
+    }
+
+    private fun describe(status: UsbHidCapture.Status): String = when (status) {
+        UsbHidCapture.Status.Stopped -> "stopped"
+        UsbHidCapture.Status.NoDeviceFound -> "no USB headset with a button interface found"
+        is UsbHidCapture.Status.AwaitingPermission -> "waiting for USB access to ${status.deviceName}"
+        is UsbHidCapture.Status.Claimed ->
+            "filtering ${status.deviceName} (buttons: ${status.buttons.joinToString()})"
+        is UsbHidCapture.Status.Unsupported -> "${status.deviceName}: ${status.why}"
+        is UsbHidCapture.Status.Failed -> "failed: ${status.why}"
     }
 
     private fun deviceNameFor(deviceId: Int): String =
