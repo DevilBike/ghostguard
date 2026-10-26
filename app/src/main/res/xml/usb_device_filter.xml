@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Audio class devices, HID class devices, and composite devices that
+         declare their class per interface. A USB-C headset is one of these. -->
+    <usb-device class="1" />
+    <usb-device class="3" />
+    <usb-device class="239" />
+    <usb-device class="0" />
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GhostGuard</string>
+    <string name="notification_listener_label">GhostGuard media access</string>
+    <string name="accessibility_label">GhostGuard volume key filter</string>
+    <string name="accessibility_description">Lets GhostGuard see volume key presses from your headphones before other apps do, so it can drop the false ones. Only key presses are read; screen contents are not.</string>
+</resources>
