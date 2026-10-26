@@ -1,10 +1,12 @@
 package dev.ghostguard.service
 
+import android.Manifest
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
@@ -85,6 +87,12 @@ class UsbHidCapture(
         val device = usbManager.deviceList.values.firstOrNull { it.hidInterface() != null }
         if (device == null) {
             onStatus(Status.NoDeviceFound)
+            return
+        }
+
+        if (!hasRecordPermission(context)) {
+            // Android would show "not granted access to record" and refuse.
+            onStatus(Status.Failed("needs the microphone permission to open ${device.displayName()}"))
             return
         }
 
@@ -227,14 +235,22 @@ class UsbHidCapture(
     private fun UsbDevice.displayName(): String =
         productName ?: "USB device ${String.format("%04x:%04x", vendorId, productId)}"
 
-    private companion object {
-        const val ACTION_PERMISSION = "dev.ghostguard.USB_PERMISSION"
-        const val READ_TIMEOUT_MS = 250
-        const val CONTROL_TIMEOUT_MS = 2_000
-        const val REQ_TYPE_STANDARD_INTERFACE = 0x01
-        const val REQUEST_GET_DESCRIPTOR = 0x06
-        const val DESCRIPTOR_TYPE_REPORT = 0x22
-        const val USAGE_PAGE_CONSUMER = 0x0C
-        const val USAGE_PAGE_TELEPHONY = 0x0B
+    companion object {
+        /**
+         * Android will not grant USB access to a device with an audio input
+         * unless the app holds RECORD_AUDIO, even though we never record.
+         */
+        fun hasRecordPermission(context: Context): Boolean =
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+
+        private const val ACTION_PERMISSION = "dev.ghostguard.USB_PERMISSION"
+        private const val READ_TIMEOUT_MS = 250
+        private const val CONTROL_TIMEOUT_MS = 2_000
+        private const val REQ_TYPE_STANDARD_INTERFACE = 0x01
+        private const val REQUEST_GET_DESCRIPTOR = 0x06
+        private const val DESCRIPTOR_TYPE_REPORT = 0x22
+        private const val USAGE_PAGE_CONSUMER = 0x0C
+        private const val USAGE_PAGE_TELEPHONY = 0x0B
     }
 }

@@ -120,7 +120,13 @@ class GuardService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         startForegroundCompat()
         // Notification access may have been granted since onCreate.
-        handler.post { watchActiveSessions() }
+        handler.post {
+            watchActiveSessions()
+            // Permissions may have changed since the last attempt.
+            if (config.guardEnabled && config.captureMode != CaptureMode.MEDIA_SESSION) {
+                usbCapture.scan()
+            }
+        }
         return START_STICKY
     }
 

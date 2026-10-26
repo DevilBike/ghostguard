@@ -25,16 +25,31 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.ghostguard.GhostGuardApp
+import dev.ghostguard.service.GuardService
 
 class MainActivity : ComponentActivity() {
+
+    private val permissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+            // A USB headset can only be opened once the record permission is
+            // held, so let a running guard try again straight away.
+            if (granted[Manifest.permission.RECORD_AUDIO] == true &&
+                GhostGuardApp.from(this).settings.config.value.guardEnabled
+            ) {
+                GuardService.start(this)
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val request = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
-            request.launch(Manifest.permission.POST_NOTIFICATIONS)
+        val wanted = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
+        if (savedInstanceState == null) permissions.launch(wanted.toTypedArray())
 
         val app = GhostGuardApp.from(this)
         setContent {
@@ -46,6 +61,9 @@ class MainActivity : ComponentActivity() {
                     },
                     openAccessibility = {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    },
+                    requestMicrophone = {
+                        permissions.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
                     },
                 )
             }
@@ -60,6 +78,7 @@ private fun Root(
     app: GhostGuardApp,
     openNotificationAccess: () -> Unit,
     openAccessibility: () -> Unit,
+    requestMicrophone: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.STATUS) }
 
@@ -88,7 +107,7 @@ private fun Root(
     ) { padding ->
         val content = Modifier.padding(padding)
         when (tab) {
-            Tab.STATUS -> StatusScreen(app, openNotificationAccess, openAccessibility, content)
+            Tab.STATUS -> StatusScreen(app, openNotificationAccess, openAccessibility, requestMicrophone, content)
             Tab.TUNING -> TuningScreen(app, content)
             Tab.LOG -> LogScreen(app, content)
         }

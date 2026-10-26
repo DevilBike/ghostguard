@@ -28,6 +28,7 @@ import dev.ghostguard.GhostGuardApp
 import dev.ghostguard.data.CaptureMode
 import dev.ghostguard.service.GuardNotificationListener
 import dev.ghostguard.service.GuardService
+import dev.ghostguard.service.UsbHidCapture
 import dev.ghostguard.service.VolumeKeyAccessibilityService
 
 @Composable
@@ -35,6 +36,7 @@ fun StatusScreen(
     app: GhostGuardApp,
     openNotificationAccess: () -> Unit,
     openAccessibility: () -> Unit,
+    requestMicrophone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -50,6 +52,7 @@ fun StatusScreen(
     }
     val listenerGranted = remember(resumes) { GuardNotificationListener.isEnabled(context) }
     val accessibilityGranted = remember(resumes) { VolumeKeyAccessibilityService.isEnabled(context) }
+    val microphoneGranted = remember(resumes) { UsbHidCapture.hasRecordPermission(context) }
 
     val blocked = entries.count { !it.allowed }
     val wouldBlock = entries.count { it.shadowed }
@@ -133,6 +136,17 @@ fun StatusScreen(
                 "accepted presses go out to the system instead, which is less reliable.",
             onFix = openNotificationAccess,
         )
+
+        if (config.captureMode != CaptureMode.MEDIA_SESSION) {
+            PermissionCard(
+                title = "Microphone (for USB access)",
+                granted = microphoneGranted,
+                why = "Android only lets an app open a USB headset that has a mic if the app " +
+                    "may record audio. GhostGuard never opens the mic; it reads the button " +
+                    "interface only.",
+                onFix = requestMicrophone,
+            )
+        }
 
         if (config.filterVolumeKeys) {
             PermissionCard(
