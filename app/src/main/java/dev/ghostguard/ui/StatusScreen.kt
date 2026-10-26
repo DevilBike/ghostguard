@@ -15,10 +15,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.ghostguard.GhostGuardApp
 import dev.ghostguard.data.CaptureMode
@@ -36,6 +40,16 @@ fun StatusScreen(
     val context = LocalContext.current
     val config by app.settings.config.collectAsStateWithLifecycle()
     val entries by app.eventLog.entries.collectAsStateWithLifecycle()
+
+    // Permissions are granted in system settings, outside the app, so check
+    // them again every time the user comes back.
+    var resumes by remember { mutableIntStateOf(0) }
+    LifecycleResumeEffect(Unit) {
+        resumes++
+        onPauseOrDispose {}
+    }
+    val listenerGranted = remember(resumes) { GuardNotificationListener.isEnabled(context) }
+    val accessibilityGranted = remember(resumes) { VolumeKeyAccessibilityService.isEnabled(context) }
 
     val blocked = entries.count { !it.allowed }
     val wouldBlock = entries.count { it.shadowed }
@@ -114,7 +128,7 @@ fun StatusScreen(
 
         PermissionCard(
             title = "Notification access",
-            granted = GuardNotificationListener.isEnabled(context),
+            granted = listenerGranted,
             why = "Lets GhostGuard hand a real press to whatever is playing. Without it, " +
                 "accepted presses go out to the system instead, which is less reliable.",
             onFix = openNotificationAccess,
@@ -123,7 +137,7 @@ fun StatusScreen(
         if (config.filterVolumeKeys) {
             PermissionCard(
                 title = "Accessibility access",
-                granted = VolumeKeyAccessibilityService.isEnabled(context),
+                granted = accessibilityGranted,
                 why = "The only way to see volume keys before the system acts on them. " +
                     "GhostGuard reads key presses only.",
                 onFix = openAccessibility,

@@ -109,12 +109,7 @@ class GuardService : LifecycleService() {
             ContextCompat.RECEIVER_EXPORTED,
         )
 
-        runCatching {
-            getSystemService(MediaSessionManager::class.java).addOnActiveSessionsChangedListener(
-                sessionsChanged,
-                ComponentName(this, GuardNotificationListener::class.java),
-            )
-        }
+        watchActiveSessions()
 
         lifecycleScope.launch {
             GhostGuardApp.from(this@GuardService).settings.config.collectLatest { applyConfig(it) }
@@ -124,6 +119,8 @@ class GuardService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         startForegroundCompat()
+        // Notification access may have been granted since onCreate.
+        handler.post { watchActiveSessions() }
         return START_STICKY
     }
 
@@ -138,6 +135,19 @@ class GuardService : LifecycleService() {
         usbCapture.stop()
         worker.quitSafely()
         super.onDestroy()
+    }
+
+    private var watchingSessions = false
+
+    /** Needs notification access, so it is retried until that is granted. */
+    private fun watchActiveSessions() {
+        if (watchingSessions) return
+        watchingSessions = runCatching {
+            getSystemService(MediaSessionManager::class.java).addOnActiveSessionsChangedListener(
+                sessionsChanged,
+                ComponentName(this, GuardNotificationListener::class.java),
+            )
+        }.isSuccess
     }
 
     private fun applyConfig(next: Config) {
