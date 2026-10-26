@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.ghostguard.BuildConfig
 import dev.ghostguard.GhostGuardApp
 import dev.ghostguard.data.CaptureMode
 import dev.ghostguard.service.GuardNotificationListener
@@ -64,7 +65,13 @@ fun StatusScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("GhostGuard", style = MaterialTheme.typography.headlineMedium)
+        Column {
+            Text("GhostGuard", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "Version ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
 
         SettingRow(
             title = "Guard running",

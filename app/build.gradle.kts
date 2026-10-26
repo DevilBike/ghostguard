@@ -6,6 +6,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// The base version is bumped by hand; the last part is the CI build number,
+// so every APK from GitHub Actions has a distinct, increasing version.
+val baseVersion = "0.2"
+val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+val fullVersion = "$baseVersion.$buildNumber"
+
+base {
+    archivesName = "ghostguard-$fullVersion"
+}
+
 android {
     namespace = "dev.ghostguard"
     compileSdk = 35
@@ -14,8 +24,8 @@ android {
         applicationId = "dev.ghostguard"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = maxOf(buildNumber, 1)
+        versionName = fullVersion
     }
 
     buildTypes {
@@ -27,6 +37,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {

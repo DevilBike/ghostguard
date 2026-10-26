@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.ghostguard.BuildConfig
 import dev.ghostguard.GhostGuardApp
 import dev.ghostguard.service.Diagnostics
 import dev.ghostguard.service.GuardNotificationListener
@@ -54,7 +55,7 @@ fun DebugScreen(app: GhostGuardApp, modifier: Modifier = Modifier) {
     }
 
     val report = buildString {
-        appendLine("GhostGuard diagnostics")
+        appendLine("GhostGuard ${BuildConfig.VERSION_NAME} diagnostics")
         appendLine("Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT}), ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
         appendLine("guard switch: ${if (config.guardEnabled) "on" else "off"}, mode: ${config.captureMode}, observe-only: ${config.tuning.shadowMode}")
         appendLine("service running: ${state.serviceRunning}")

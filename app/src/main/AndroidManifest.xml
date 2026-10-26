@@ -28,9 +28,18 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
-            <!-- Lets Android hand us the headset the moment it is plugged in,
-                 instead of waiting for the user to grant USB access by hand. -->
+        <!-- Lets Android hand us the headset the moment it is plugged in,
+             instead of waiting for the user to grant USB access by hand.
+             Invisible: it starts the guard and closes without showing UI. -->
+        <activity
+            android:name=".ui.UsbAttachActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
