@@ -87,4 +87,34 @@ class HidReportMapTest {
             HidReportMap.parse(headsetDescriptor.copyOfRange(0, end))
         }
     }
+
+    /** Captured from an Audiovance Vibes 202MC on a OnePlus 13. */
+    private val audiovanceDescriptor = hex(
+        "05 0c 09 01 a1 01 85 01 15 00 26 ff 00 09 00 75 08 95 3d 91 02 09 00 81 02 c0 " +
+            "05 0c 09 01 a1 01 85 02 15 00 25 01 75 01 95 02 09 e9 09 ea 81 02 95 02 09 cd " +
+            "09 cf 81 02 95 04 09 00 81 01 c0"
+    )
+
+    @Test
+    fun `audiovance buttons live in report 2 and the vendor report is ignored`() {
+        val bits = HidReportMap.parse(audiovanceDescriptor)
+
+        assertEquals(listOf(2, 2, 2, 2), bits.map { it.reportId })
+        assertEquals(listOf(0xE9, 0xEA, 0xCD, 0xCF), bits.map { it.usage })
+        assertEquals(listOf(0, 1, 2, 3), bits.map { it.bitOffset })
+    }
+
+    @Test
+    fun `audiovance play press is read from the report`() {
+        val reader = HidReportReader(HidReportMap.parse(audiovanceDescriptor), usesReportIds = true)
+
+        val play = byteArrayOf(0x02, 0x04)
+        assertEquals(listOf(0xCD), reader.pressedUsages(play, play.size).map { it.usage })
+
+        val vendor = ByteArray(62).also { it[0] = 0x01; it[1] = 0x04 }
+        assertTrue(reader.pressedUsages(vendor, vendor.size).isEmpty())
+    }
+
+    private fun hex(text: String): ByteArray =
+        text.split(' ').filter { it.isNotBlank() }.map { it.toInt(16).toByte() }.toByteArray()
 }

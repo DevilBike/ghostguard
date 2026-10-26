@@ -13,8 +13,11 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.hardware.usb.UsbRequest
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import java.nio.ByteBuffer
+import java.util.concurrent.TimeoutException
 import dev.ghostguard.core.ButtonMapping
 import dev.ghostguard.filter.Button
 import dev.ghostguard.filter.hid.HidBit
@@ -180,27 +183,78 @@ class UsbHidCapture(
         }
     }
 
+    /**
+     * Reads interrupt reports with [UsbRequest]. `bulkTransfer` on an
+     * interrupt endpoint returns nothing at all on some phones, which is what
+     * a OnePlus 13 did with an Audiovance headset; the request API is the path
+     * Android documents for interrupt transfers.
+     */
     private fun readLoop(
         conn: UsbDeviceConnection,
         endpoint: UsbEndpoint,
         reader: HidReportReader,
         deviceName: String,
     ) {
-        val buffer = ByteArray(maxOf(endpoint.maxPacketSize, 8))
+        val request = UsbRequest()
+        if (!request.initialize(conn, endpoint)) {
+            Diagnostics.note("$deviceName: could not set up the report reader")
+            return
+        }
+        Diagnostics.note(
+            "$deviceName: reading endpoint 0x%02x, type %d, packet %d bytes".format(
+                endpoint.address, endpoint.type, endpoint.maxPacketSize,
+            )
+        )
+
+        val buffer = ByteBuffer.allocate(maxOf(endpoint.maxPacketSize, 64))
+        val bytes = ByteArray(buffer.capacity())
         var held = emptySet<Button>()
+        var reportsLogged = 0
+        var queued = false
 
-        while (running) {
-            val read = conn.bulkTransfer(endpoint, buffer, buffer.size, READ_TIMEOUT_MS)
-            if (read <= 0) continue // timeout: normal, nothing was pressed
+        try {
+            while (running) {
+                if (!queued) {
+                    buffer.clear()
+                    queued = request.queue(buffer)
+                    if (!queued) {
+                        Diagnostics.note("$deviceName: queueing a read failed; reader stopped")
+                        return
+                    }
+                }
 
-            val now = SystemClock.uptimeMillis()
-            val pressed = reader.pressedUsages(buffer, read)
-                .map { it.toButton() }
-                .filterTo(HashSet()) { it != Button.UNKNOWN }
+                val done = try {
+                    conn.requestWait(READ_TIMEOUT_MS.toLong())
+                } catch (_: TimeoutException) {
+                    continue // nothing pressed; the request stays queued
+                }
+                if (done !== request) continue
+                queued = false
 
-            for (button in pressed - held) onEvent(button, true, now, deviceName)
-            for (button in held - pressed) onEvent(button, false, now, deviceName)
-            held = pressed
+                val length = buffer.position()
+                if (length <= 0) continue
+                buffer.flip()
+                buffer.get(bytes, 0, length)
+
+                if (reportsLogged < MAX_LOGGED_REPORTS) {
+                    reportsLogged++
+                    Diagnostics.note("$deviceName report: ${bytes.copyOf(length).toHex()}")
+                }
+
+                val now = SystemClock.uptimeMillis()
+                val pressed = reader.pressedUsages(bytes, length)
+                    .map { it.toButton() }
+                    .filterTo(HashSet()) { it != Button.UNKNOWN }
+
+                for (button in pressed - held) onEvent(button, true, now, deviceName)
+                for (button in held - pressed) onEvent(button, false, now, deviceName)
+                held = pressed
+            }
+        } catch (e: Exception) {
+            Diagnostics.note("$deviceName: reader stopped: $e")
+        } finally {
+            runCatching { request.cancel() }
+            request.close()
         }
     }
 
@@ -255,6 +309,7 @@ class UsbHidCapture(
 
         private const val ACTION_PERMISSION = "dev.ghostguard.USB_PERMISSION"
         private const val READ_TIMEOUT_MS = 250
+        private const val MAX_LOGGED_REPORTS = 40
         private const val CONTROL_TIMEOUT_MS = 2_000
         private const val REQ_TYPE_STANDARD_INTERFACE = 0x01
         private const val REQUEST_GET_DESCRIPTOR = 0x06
