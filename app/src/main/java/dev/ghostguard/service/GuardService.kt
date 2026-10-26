@@ -44,6 +44,7 @@ class GuardService : LifecycleService() {
     private lateinit var forwarder: Forwarder
     private lateinit var mediaCapture: MediaCapture
     private lateinit var usbCapture: UsbHidCapture
+    private lateinit var resumer: DropoutResumer
 
     private val filter = PhantomFilter()
     private var config = Config()
@@ -63,6 +64,10 @@ class GuardService : LifecycleService() {
     private val plugReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             handler.post {
+                Diagnostics.note("broadcast: ${intent.action?.substringAfterLast('.')}")
+                if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                    resumer.onBecomingNoisy()
+                }
                 filter.quarantineFor(SystemClock.uptimeMillis())
                 when (intent.action) {
                     UsbManager.ACTION_USB_DEVICE_ATTACHED -> usbCapture.scan()
@@ -97,6 +102,12 @@ class GuardService : LifecycleService() {
             }
         }
 
+        resumer = DropoutResumer(this, handler) { message, deviceName ->
+            Diagnostics.note("connection: $deviceName $message")
+            GhostGuardApp.from(this).eventLog.recordConnection(message, deviceName)
+        }
+        resumer.start()
+
         GuardBridge.volumeKeySink = ::onVolumeKey
 
         ContextCompat.registerReceiver(
@@ -106,6 +117,7 @@ class GuardService : LifecycleService() {
                 addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
                 addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
                 addAction(AudioManager.ACTION_HEADSET_PLUG)
+                addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
             },
             ContextCompat.RECEIVER_EXPORTED,
         )
@@ -150,6 +162,7 @@ class GuardService : LifecycleService() {
         runCatching { unregisterReceiver(plugReceiver) }
         mediaCapture.stop()
         usbCapture.stop()
+        resumer.stop()
         worker.quitSafely()
         super.onDestroy()
     }
@@ -171,6 +184,7 @@ class GuardService : LifecycleService() {
         handler.post {
             config = next
             filter.tuning = next.tuning
+            resumer.enabled = next.resumeAfterGlitch
 
             val wantsUsb = next.captureMode != CaptureMode.MEDIA_SESSION
             val wantsMedia = next.captureMode != CaptureMode.USB_HID ||

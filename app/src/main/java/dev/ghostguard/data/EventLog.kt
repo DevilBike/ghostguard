@@ -21,10 +21,13 @@ data class LogEntry(
     val holdMs: Long?,
     val source: String,
     val deviceName: String,
+    /** Set for connection events, which are not button presses at all. */
+    val message: String? = null,
 ) {
     fun toCsvRow(): String {
         val stamp = TIMESTAMP.format(Date(wallClockMs))
         val verdict = when {
+            message != null -> "connection"
             shadowed -> "would-block"
             allowed -> "allowed"
             else -> "blocked"
@@ -33,7 +36,7 @@ data class LogEntry(
             stamp,
             button.name,
             verdict,
-            reason.name,
+            message?.replace(',', ' ') ?: reason.name,
             holdMs?.toString() ?: "",
             source,
             deviceName.replace(',', ' '),
@@ -81,6 +84,10 @@ class EventLog(private val file: File, private val capacity: Int = 500) {
             )
         }
 
+        append(entry)
+    }
+
+    private fun append(entry: LogEntry) {
         _entries.value = (_entries.value + entry).takeLast(capacity)
         runCatching {
             if (!file.exists()) {
@@ -89,6 +96,24 @@ class EventLog(private val file: File, private val capacity: Int = 500) {
             }
             file.appendText(entry.toCsvRow() + "\n")
         }
+    }
+
+    /** Record something that happened to the connection rather than a press. */
+    @Synchronized
+    fun recordConnection(message: String, deviceName: String) {
+        append(
+            LogEntry(
+                wallClockMs = System.currentTimeMillis(),
+                button = Button.UNKNOWN,
+                allowed = true,
+                reason = Reason.CLEAN,
+                shadowed = false,
+                holdMs = null,
+                source = "connection",
+                deviceName = deviceName,
+                message = message,
+            )
+        )
     }
 
     @Synchronized

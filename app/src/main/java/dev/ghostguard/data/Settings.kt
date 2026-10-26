@@ -28,6 +28,8 @@ data class Config(
     val captureMode: CaptureMode = CaptureMode.BOTH,
     val filterVolumeKeys: Boolean = false,
     val startOnBoot: Boolean = true,
+    /** Restart playback when the headset drops off the bus and comes straight back. */
+    val resumeAfterGlitch: Boolean = true,
     val tuning: Tuning = Tuning(),
 )
 
@@ -54,6 +56,7 @@ class Settings(context: Context) {
             }.getOrDefault(CaptureMode.BOTH),
             filterVolumeKeys = prefs.getBoolean(KEY_VOLUME, false),
             startOnBoot = prefs.getBoolean(KEY_BOOT, true),
+            resumeAfterGlitch = prefs.getBoolean(KEY_RESUME, true),
             tuning = Tuning(
                 debounceMs = prefs.getLong(KEY_DEBOUNCE, defaults.debounceMs),
                 crossButtonDebounceMs = prefs.getLong(KEY_CROSS, defaults.crossButtonDebounceMs),
@@ -81,6 +84,7 @@ class Settings(context: Context) {
             .putString(KEY_MODE, config.captureMode.name)
             .putBoolean(KEY_VOLUME, config.filterVolumeKeys)
             .putBoolean(KEY_BOOT, config.startOnBoot)
+            .putBoolean(KEY_RESUME, config.resumeAfterGlitch)
             .putLong(KEY_DEBOUNCE, t.debounceMs)
             .putLong(KEY_CROSS, t.crossButtonDebounceMs)
             .putLong(KEY_MIN_HOLD, t.minHoldMs)
@@ -101,6 +105,7 @@ class Settings(context: Context) {
         const val KEY_MODE = "capture_mode"
         const val KEY_VOLUME = "filter_volume_keys"
         const val KEY_BOOT = "start_on_boot"
+        const val KEY_RESUME = "resume_after_glitch"
         const val KEY_DEBOUNCE = "debounce_ms"
         const val KEY_CROSS = "cross_debounce_ms"
         const val KEY_MIN_HOLD = "min_hold_ms"

@@ -123,6 +123,14 @@ fun StatusScreen(
         )
 
         SettingRow(
+            title = "Resume after a dropout",
+            subtitle = "If the plug loses contact for a moment and your music pauses, " +
+                "start it again as soon as the earbuds come back",
+            checked = config.resumeAfterGlitch,
+            onCheckedChange = { on -> app.settings.update { it.copy(resumeAfterGlitch = on) } },
+        )
+
+        SettingRow(
             title = "Start when the phone boots",
             subtitle = null,
             checked = config.startOnBoot,
@@ -161,7 +169,14 @@ fun StatusScreen(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Recent", style = MaterialTheme.typography.titleMedium)
-                Text("${entries.size} presses recorded", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "${entries.count { it.message == null }} presses recorded",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "${entries.count { it.message?.startsWith("lost") == true }} times the plug lost contact",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 Text("$blocked dropped as false", style = MaterialTheme.typography.bodyMedium)
                 if (config.tuning.shadowMode) {
                     Text(

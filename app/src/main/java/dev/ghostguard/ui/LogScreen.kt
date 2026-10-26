@@ -57,6 +57,10 @@ fun LogScreen(app: GhostGuardApp, modifier: Modifier = Modifier) {
 
 @Composable
 private fun EntryRow(entry: LogEntry) {
+    if (entry.message != null) {
+        ConnectionRow(entry)
+        return
+    }
     val verdict = when {
         entry.shadowed -> "would block"
         entry.allowed -> "allowed"
@@ -88,6 +92,28 @@ private fun EntryRow(entry: LogEntry) {
                 "${entry.source} · ${entry.deviceName}",
                 style = MaterialTheme.typography.labelSmall,
             )
+        }
+    }
+}
+
+@Composable
+private fun ConnectionRow(entry: LogEntry) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    CLOCK.format(Date(entry.wallClockMs)),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Text("Connection", style = MaterialTheme.typography.bodyMedium)
+            }
+            Text(
+                entry.message.orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+            Text(entry.deviceName, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
